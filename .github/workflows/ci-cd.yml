@@ -76,24 +76,15 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            # Убедимся директория есть
             mkdir -p ~/app
-
-            # Переходим в директорию приложения
             cd ~/app
 
-            # Если git репозиторий не существует, инициализируем его
             if [ ! -d .git ]; then
               git init
               git remote add origin git@github.com:Andrej-Denisov/ci-cd.git
             fi
-
-            # Получаем последнюю версию кода
             git fetch origin
             git reset --hard origin/main
 
-            # Очистка и сборка проекта
             ./gradlew clean build
-
-            # Запускаем приложение
             nohup java -jar build/libs/my-app.jar --server.port=8080 > app.log 2>&1 &
