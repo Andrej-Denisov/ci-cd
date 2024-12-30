@@ -1,0 +1,99 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Проверяем код из репозитория
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Делаем gradlew исполняемым
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # Устанавливаем Java
+      - name: Set up Java
+        uses: actions/setup-java@v2
+        with:
+          java-version: 11
+          distribution: temurin
+
+      # Сборка проекта
+      - name: Build project
+        run: ./gradlew build
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      # Проверяем код из репозитория
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Делаем gradlew исполняемым
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # Запуск тестов
+      - name: Run tests
+        run: ./gradlew test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Add SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Disable strict host key checking
+        run: |
+          mkdir -p ~/.ssh
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+        
+      # Деплой на удаленный сервер через SSH
+      - name: Deploy to Remote Server using SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 130.193.57.6
+          username: andrej
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            # Убедимся директория есть
+            mkdir -p ~/app
+
+            # Переходим в директорию приложения
+            cd ~/app
+
+            # Если git репозиторий не существует, инициализируем его
+            if [ ! -d .git ]; then
+              git init
+              git remote add origin git@github.com:Andrej-Denisov/ci-cd.git
+            fi
+
+            # Получаем последнюю версию кода
+            git fetch origin
+            git reset --hard origin/main
+
+            # Очистка и сборка проекта
+            ./gradlew clean build
+
+            # Запускаем приложение
+            nohup java -jar build/libs/my-app.jar --server.port=8080 > app.log 2>&1 &
